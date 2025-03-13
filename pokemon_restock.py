@@ -23,7 +23,7 @@ from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
+from selenium.webdriver.common.by = By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -124,7 +124,8 @@ class TargetPokemonRestockMonitor:
             # Check for "Out of stock" or "Sold out" indicators
             try:
                 out_of_stock_elements = self.driver.find_elements(By.XPATH, 
-                    "//*[contains(text(), 'Out of stock') or contains(text(), 'Sold out') or contains(text(), 'Currently unavailable')]")
+                    "//*[contains(text(), 'Out of stock') or contains(text(), 'Sold out') or contains(text(), 'Currently unavailable')]"
+                )
                 
                 if out_of_stock_elements:
                     logger.info(f"{item['name']} is out of stock.")
@@ -228,7 +229,7 @@ class TargetPokemonRestockMonitor:
                 # Alternative check - see if the cart count has increased
                 try:
                     cart_count = WebDriverWait(self.driver, 5).until(
-                        EC.presence_of_element_located((By.XPATH, "//a[@data-test='@web/CartLink']//*[contains(@data-test, 'cartItem')]"))
+                        EC.presence_of_element_located((By.XPATH, "//a[@data-test='@web/CartLink']//*[contains(@data-test, 'cartItem')]")
                     )
                     if cart_count:
                         logger.info(f"{item['name']} appears to be added to cart (cart count updated).")
@@ -256,7 +257,7 @@ class TargetPokemonRestockMonitor:
             
             # Wait for cart page to load
             WebDriverWait(self.driver, 10).until(
-                EC.presence_of_element_located((By.XPATH, "//*[contains(text(), 'Cart')]"))
+                EC.presence_of_element_located((By.XPATH, "//*[contains(text(), 'Cart')]")
             )
             
             # Click checkout button
@@ -267,7 +268,7 @@ class TargetPokemonRestockMonitor:
             
             # Wait for the checkout page to load
             WebDriverWait(self.driver, 15).until(
-                EC.presence_of_element_located((By.XPATH, "//*[contains(text(), 'Shipping') or contains(text(), 'Delivery')]"))
+                EC.presence_of_element_located((By.XPATH, "//*[contains(text(), 'Shipping') or contains(text(), 'Delivery')]")
             )
             
             # Continue with checkout process - this will vary depending on whether you have saved payment methods
@@ -293,130 +294,6 @@ class TargetPokemonRestockMonitor:
             logger.error(f"Error during checkout: {str(e)}")
             return False
 
-    def send_notification(self, subject, message):
-        """
-        Send an email notification.
-        Args:
-            subject: Email subject
-            message: Email message body
-        Returns: True if email sent successfully, False otherwise
-        """
-        if not SEND_EMAIL_NOTIFICATIONS or not NOTIFICATION_EMAIL or not EMAIL_PASSWORD:
-            logger.info("Email notifications are disabled or not configured.")
-            return False
-            
-        try:
-            logger.info(f"Sending email notification: {subject}")
-            
-            msg = MIMEMultipart()
-            msg['From'] = NOTIFICATION_EMAIL
-            msg['To'] = NOTIFICATION_EMAIL  # Send to self
-            msg['Subject'] = subject
-            
-            msg.attach(MIMEText(message, 'plain'))
-            
-            server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
-            server.starttls()
-            server.login(NOTIFICATION_EMAIL, EMAIL_PASSWORD)
-            server.send_message(msg)
-            server.quit()
-            
-            logger.info("Email notification sent successfully.")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error sending email notification: {str(e)}")
-            return False
-
-    def purchase_when_in_stock(self):
-        """Main function to monitor stock and purchase when available."""
-        logger.info("Starting Pokemon card restock monitor...")
-        
-        if not TARGET_ITEMS:
-            logger.error("No items configured to monitor. Please add items to the TARGET_ITEMS list.")
-            return
-            
-        retry_count = 0
-        in_stock_item = None
-        
-        try:
-            # Login first so we're ready to purchase quickly
-            if not self.login():
-                logger.error("Failed to login. Please check your credentials.")
-                return
-                
-            while True:
-                # Check each item in the list
-                for item in TARGET_ITEMS:
-                    # Check if item is in stock
-                    if self.check_stock(item):
-                        logger.info(f"{item['name']} is in stock! Attempting to purchase...")
-                        in_stock_item = item
-                        
-                        # Send notification
-                        self.send_notification(
-                            f"Pokemon Card In Stock: {item['name']}",
-                            f"The item '{item['name']}' is now in stock at Target!\n\nURL: {item['url']}\n\nAttempting to purchase automatically."
-                        )
-                        
-                        # Try to add to cart
-                        if self.add_to_cart(item):
-                            # Proceed to checkout
-                            if self.checkout():
-                                logger.info(f"Purchase attempt for {item['name']} completed!")
-                                
-                                # Send success notification
-                                self.send_notification(
-                                    f"Purchase Attempt Completed: {item['name']}",
-                                    f"The purchase process for '{item['name']}' has been completed!\n\nPlease check your Target account for order confirmation."
-                                )
-                                
-                                return  # Exit after successful purchase
-                            else:
-                                logger.error("Checkout failed.")
-                                
-                                # Send failure notification
-                                self.send_notification(
-                                    f"Checkout Failed: {item['name']}",
-                                    f"The checkout process for '{item['name']}' has failed.\n\nPlease try manually: {item['url']}"
-                                )
-                        else:
-                            logger.error(f"Failed to add {item['name']} to cart.")
-                            
-                            # Send failure notification
-                            self.send_notification(
-                                f"Add to Cart Failed: {item['name']}",
-                                f"Failed to add '{item['name']}' to cart.\n\nPlease try manually: {item['url']}"
-                            )
-                        
-                        # Increment retry counter
-                        retry_count += 1
-                        if retry_count >= MAX_RETRIES:
-                            logger.error(f"Maximum number of retries ({MAX_RETRIES}) reached. Stopping.")
-                            return
-                        
-                        # Break the loop to retry this item
-                        break
-                else:  # This else belongs to the for loop (executes when no break occurs)
-                    # Reset retry counter when all items are out of stock
-                    retry_count = 0
-                    
-                    # Wait before checking again
-                    wait_time = CHECK_INTERVAL + random.uniform(-5, 5)  # Add some randomness
-                    logger.info(f"All items are out of stock. Checking again in approximately {wait_time:.0f} seconds...")
-                    time.sleep(wait_time)
-                    
-        except KeyboardInterrupt:
-            logger.info("Monitoring stopped by user.")
-        except Exception as e:
-            logger.error(f"Unexpected error: {str(e)}")
-        finally:
-            # Keep browser open if we reached checkout, otherwise close it
-            if not (in_stock_item and retry_count > 0):
-                if self.driver:
-                    self.driver.quit()
-                    logger.info("Browser closed.")
-
     def close(self):
         """Close the webdriver."""
         if self.driver:
@@ -429,4 +306,4 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"Fatal error: {str(e)}")
     finally:
-        monitor.close() 
+        monitor.close()
